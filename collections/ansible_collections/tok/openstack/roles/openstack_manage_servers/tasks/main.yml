@@ -1,0 +1,34 @@
+---
+- name: Provision the servers
+  os_server:
+    cloud: "{{ openstack_cloud | default('openstack') }}"
+    name: "{{ item.instance_name }}"
+    security_groups: "{{ item.security_group_name | default(omit) }}"
+    state: "{{ item.state | default('present') }}"
+    image: "{{ item.image | default('rhel-7.6') }}"
+    flavor: "{{ item.flavor | default('m2.medium') }}"
+    meta: "group={{ item.group }},deployment_name={{ item.deployment }}"
+    nics:
+      - net-name: int_network
+    userdata: |
+      #!/bin/bash
+      curl -o /tmp/openstack.pub http://www.opentlc.com/download/ansible_bootcamp/openstack_keys/openstack.pub
+      cat /tmp/openstack.pub >> /home/cloud-user/.ssh/authorized_keys
+  loop: "{{ openstack_servers }}"
+  register: server_instances
+
+- name: Debug server instances
+  debug:
+    msg: ">> {{ item.item.instance_name }}"
+  loop: "{{ r_instances.results }}"
+
+- name: Add floating IP
+  os_floating_ip:
+    cloud: "{{ openstack_cloud | default('openstack') }}"
+    state: present
+    reuse: yes
+    server: "{{ item.item.instance_name }}"
+    network: ext_network
+    wait: true
+    timeout: 200
+  loop: "{{ server_instances.results }} "
